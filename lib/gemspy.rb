@@ -80,25 +80,24 @@ module Gemspy
     end
 
     def spy_gems
+      gem_pattern = @state.gems.map { |gem| Regexp.escape(gem) }.join('|')
+      pattern = /^(#{gem_pattern}) \((\d+(?:\.\d+)*)\)$/
+
       @state.apps.each do |app|
+        next unless Dir.exist?(File.join(@state.apps_path, app, '.git'))
+
         lock = File.join(@state.apps_path, app, 'Gemfile.lock')
         next unless File.exist?(lock)
 
         File.open(lock).each_line do |line|
-          @state.gems.each do |gem|
-            version = fetch_version(line, gem)
-            @state.scan[gem][app] = version if version
-          end
+          stripped_line = line.strip
+          match = stripped_line.match(pattern)
+          next unless match
+
+          gem_name, version = match.captures
+          @state.scan[gem_name][app] = version
         end
       end
-    end
-
-    def fetch_version(line, gem)
-      escaped_gem = Regexp.escape(gem)
-      match = line.strip.match(/^#{escaped_gem} \((\d+(?:\.\d+)*)\)$/)
-      return unless match
-
-      match[1]
     end
 
     def output_xls
