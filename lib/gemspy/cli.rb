@@ -88,11 +88,12 @@ module Gemspy
         next unless File.exist?(lock)
 
         File.open(lock).each_line do |line|
-          stripped_line = line.strip
-          match = stripped_line.match(pattern)
+          match = line.strip.match(pattern)
           next unless match
 
           gem_name, version = match.captures
+          next if gem_name == app
+
           @state.scan[gem_name][app] = version
         end
       end
