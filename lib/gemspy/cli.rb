@@ -4,11 +4,13 @@ require 'optparse'
 
 module Gemspy
   class Cli
-    State = Struct.new(:gem_list_path, :apps_path, :output, :formatter, :apps, :gems, :scan, keyword_init: true) do
-      def initialize(gem_list_path: nil, apps_path: nil, output: nil, formatter: nil, apps: [], gems: [], scan: {})
+    State = Struct.new(:gem_list_path, :apps_path, :output, :formatter, :ruby_version, :apps, :gems, :scan, keyword_init: true) do
+      def initialize(gem_list_path: nil, apps_path: nil, output: nil, formatter: nil, ruby_version: false, apps: [], gems: [], scan: {})
         super
       end
     end
+
+    RUBY_VERSION_NAME = 'ruby-version'
 
     def initialize
       @state = State.new
@@ -19,6 +21,7 @@ module Gemspy
       validate_options
       read_options
       spy_gems
+      puts @state.scan
       Report.new(formatter: @state.formatter, output: @state.output, data: @state.scan).output
     end
 
@@ -37,6 +40,7 @@ module Gemspy
         parser.on('-a', '--apps DIRECTORY_PATH', 'Directory path with apps') { |a| @state.apps_path = a }
         parser.on('-o', '--output FILENAME', 'Output filename') { |o| @state.output = o }
         parser.on('-f', '--formatter FORMATTER', 'Formatter: csv or markdown') { |f| @state.formatter = f }
+        parser.on('-r', '--ruby-version', 'Include Ruby version') { @state.ruby_version = true }
         parser.on_tail('-v', '--version', 'Show version') do
           puts VERSION
           exit
@@ -72,6 +76,8 @@ module Gemspy
         @state.gems << gem
       end
 
+      @state.scan[RUBY_VERSION_NAME] = {} if @state.ruby_version
+
       @state.gems.each do |gem|
         @state.scan[gem] = {}
       end
@@ -96,6 +102,27 @@ module Gemspy
 
           @state.scan[gem_name][app] = version
         end
+
+        next unless @state.ruby_version
+
+        ruby_version = nil
+
+        tool_versions_path = File.join(@state.apps_path, app, '.tool-versions')
+        if File.exist?(tool_versions_path)
+          File.open(tool_versions_path).each_line do |line|
+            if line.start_with?('ruby ')
+              ruby_version = line.strip.split[1]
+              break
+            end
+          end
+        end
+
+        unless ruby_version
+          ruby_version_path = File.join(@state.apps_path, app, '.ruby-version')
+          ruby_version = File.read(ruby_version_path).strip if File.exist?(ruby_version_path)
+        end
+
+        @state.scan[RUBY_VERSION_NAME][app] = ruby_version if ruby_version
       end
     end
 
